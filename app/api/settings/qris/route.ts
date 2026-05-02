@@ -32,32 +32,45 @@ export async function POST(request: NextRequest) {
   try {
     const { type, username, apiKey, token, merchantId, codeQr, userId } = await request.json()
 
-    if (!type || !username || !apiKey || !token || !merchantId || !codeQr) {
-      return NextResponse.json(
-        { error: 'Missing required fields: type, username, apiKey, token, merchantId, codeQr' },
-        { status: 400 }
-      )
-    }
-
-    if (type !== 'admin' && type !== 'user') {
+    // Validate type
+    if (!type || (type !== 'admin' && type !== 'user')) {
       return NextResponse.json(
         { error: 'Invalid type. Must be admin or user' },
         { status: 400 }
       )
     }
 
-    if (type === 'user' && !userId) {
-      return NextResponse.json(
-        { error: 'userId required for user type' },
-        { status: 400 }
-      )
+    // Validate for user QRIS - needs token, merchantId, codeQr only
+    if (type === 'user') {
+      if (!userId) {
+        return NextResponse.json(
+          { error: 'userId required for user type' },
+          { status: 400 }
+        )
+      }
+      if (!token || !merchantId || !codeQr) {
+        return NextResponse.json(
+          { error: 'Missing required fields for user QRIS: token, merchantId, codeQr' },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Validate for admin QRIS - needs all fields including username and apiKey
+    if (type === 'admin') {
+      if (!username || !apiKey || !token || !merchantId || !codeQr) {
+        return NextResponse.json(
+          { error: 'Missing required fields for admin QRIS: username, apiKey, token, merchantId, codeQr' },
+          { status: 400 }
+        )
+      }
     }
 
     const qrisSettings = await createOrUpdateQrisSettings(
       type,
       {
-        username,
-        apiKey,
+        username: username || '', // Use empty string for user QRIS
+        apiKey: apiKey || '', // Use empty string for user QRIS (will use hardcoded value)
         token,
         merchantId,
         codeQr,
