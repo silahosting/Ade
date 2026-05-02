@@ -49,30 +49,31 @@ export async function createOrkutQrisPayment(
     const fee = generateRandomFee()
     const totalAmount = amount + fee
 
-    let username = ''
+    // Set default admin credentials
+    let username = ORKUT_ADMIN_USERNAME
     let apiKey = ORKUT_ADMIN_API_KEY
     let authToken = ORKUT_ADMIN_AUTH_TOKEN
     let merchantId = ORKUT_ADMIN_MERCHANT_ID
     let codeQr = ORKUT_ADMIN_CODE_QR
 
+    // Try to override with user QRIS if requested
     if (qrisType === 'user' && userId) {
       const qrisSettings = await getQrisSettings('user', userId)
-      if (qrisSettings && qrisSettings.isActive) {
+      if (qrisSettings && qrisSettings.isActive && qrisSettings.username && qrisSettings.apiKey && qrisSettings.token) {
         username = qrisSettings.username
         apiKey = qrisSettings.apiKey
         authToken = qrisSettings.token
         // Extract merchant ID from settings if available
-        merchantId = qrisSettings.username // atau bisa dari field lain
-        codeQr = qrisSettings.apiKey // Asumsi code QR disimpan di field apiKey untuk user
+        merchantId = qrisSettings.merchantId || qrisSettings.username
+        codeQr = qrisSettings.codeQr || codeQr
       }
-    } else {
-      username = ORKUT_ADMIN_USERNAME
+      // If user QRIS not found, just use admin QRIS (no error)
     }
 
     if (!username || !apiKey || !authToken || !codeQr) {
       return {
         success: false,
-        error: `QRIS ${qrisType} credentials tidak lengkap`,
+        error: `QRIS credentials tidak lengkap. Hubungi admin.`,
         transactionId: '',
         qrisUrl: '',
         qrsImageUrl: '',
@@ -158,18 +159,22 @@ export async function checkOrkutPaymentStatus(
   userId?: string
 ): Promise<OrkutCheckPaymentResponse> {
   try {
+    // Set default admin credentials
     let username = ORKUT_ADMIN_USERNAME
     let apiKey = ORKUT_ADMIN_API_KEY
     let authToken = ORKUT_ADMIN_AUTH_TOKEN
     let merchantId = ORKUT_ADMIN_MERCHANT_ID
 
+    // Try to override with user QRIS if requested
     if (qrisType === 'user' && userId) {
       const qrisSettings = await getQrisSettings('user', userId)
-      if (qrisSettings && qrisSettings.isActive) {
+      if (qrisSettings && qrisSettings.isActive && qrisSettings.username && qrisSettings.apiKey && qrisSettings.token) {
         username = qrisSettings.username
         apiKey = qrisSettings.apiKey
         authToken = qrisSettings.token
+        merchantId = qrisSettings.merchantId || qrisSettings.username
       }
+      // If user QRIS not found, just use admin QRIS (no error)
     }
 
     if (!username || !apiKey || !authToken) {
@@ -177,7 +182,7 @@ export async function checkOrkutPaymentStatus(
         success: false,
         status: 'failed',
         transactionId,
-        error: `QRIS ${qrisType} credentials tidak lengkap`,
+        error: `QRIS credentials tidak lengkap. Hubungi admin.`,
       }
     }
 
