@@ -2,8 +2,7 @@
 
 export async function createQrisPayment(orderId: string, userId: string) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${process.env.VERCEL_URL || 'localhost:3000'}`
-    const response = await fetch(`${baseUrl}/api/payments/create-qris`, {
+    const response = await fetch('/api/payments/create-qris', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -26,8 +25,7 @@ export async function createQrisPayment(orderId: string, userId: string) {
 
 export async function checkPaymentStatus(orderId: string, transactionId: string) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${process.env.VERCEL_URL || 'localhost:3000'}`
-    const response = await fetch(`${baseUrl}/api/payments/check-status`, {
+    const response = await fetch('/api/payments/check-status', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -58,8 +56,7 @@ export async function saveQrisSettings(
   codeQr?: string
 ) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${process.env.VERCEL_URL || 'localhost:3000'}`
-    const response = await fetch(`${baseUrl}/api/settings/qris`, {
+    const response = await fetch('/api/settings/qris', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -94,11 +91,7 @@ export async function getQrisSettings(type: 'admin' | 'user' = 'admin', userId?:
     params.append('type', type)
     if (userId) params.append('userId', userId)
 
-    // Get base URL from environment or construct it
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${process.env.VERCEL_URL || 'localhost:3000'}`
-    const url = `${baseUrl}/api/settings/qris?${params}`
-
-    const response = await fetch(url)
+    const response = await fetch(`/api/settings/qris?${params}`)
 
     const data = await response.json()
 
