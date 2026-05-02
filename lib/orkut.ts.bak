@@ -4,11 +4,11 @@ import type { QrisSettings } from '@/types'
 const ORKUT_API_BASE = 'https://api-orkut-delta.vercel.app/api/qris'
 
 // Default Admin credentials (set this with environment variables or .env.local)
-const ORKUT_ADMIN_USERNAME = process.env.ORKUT_ADMIN_USERNAME || 'comot4zie'
-const ORKUT_ADMIN_API_KEY = process.env.ORKUT_ADMIN_API_KEY || 'new2025'
-const ORKUT_ADMIN_AUTH_TOKEN = process.env.ORKUT_ADMIN_AUTH_TOKEN || '2008874:buGS6koVX4aATv8pZR1znsQrBDi5tgc0'
-const ORKUT_ADMIN_MERCHANT_ID = process.env.ORKUT_ADMIN_MERCHANT_ID || '2008874'
-const ORKUT_ADMIN_CODE_QR = process.env.ORKUT_ADMIN_CODE_QR || '00020101021126670016COM.NOBUBANK.WWW01189360050300000879140214057526533688570303UMI51440014ID.CO.QRIS.WWW0215ID20243395197280303UMI5204541153033605802ID5923GUNAWAN STORE OK20088746009PONTIANAK61057811162070703A01630477D2'
+const ORKUT_ADMIN_USERNAME = process.env.ORKUT_ADMIN_USERNAME || ''
+const ORKUT_ADMIN_API_KEY = process.env.ORKUT_ADMIN_API_KEY || ''
+const ORKUT_ADMIN_AUTH_TOKEN = process.env.ORKUT_ADMIN_AUTH_TOKEN || ''
+const ORKUT_ADMIN_MERCHANT_ID = process.env.ORKUT_ADMIN_MERCHANT_ID || ''
+const ORKUT_ADMIN_CODE_QR = process.env.ORKUT_ADMIN_CODE_QR || ''
 
 // Fee random antara 100-200
 function generateRandomFee(): number {
