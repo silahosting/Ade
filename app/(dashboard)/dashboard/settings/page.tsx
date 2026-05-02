@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bot, Key, Power, Save, Eye, EyeOff, AlertCircle, CheckCircle, Webhook, Trash2, RefreshCw, CreditCard } from 'lucide-react'
+import { Bot, Key, User, Power, Save, Eye, EyeOff, AlertCircle, CheckCircle, Webhook, Trash2, RefreshCw, CreditCard } from 'lucide-react'
 import { NeoButton } from '@/components/ui/neo-button'
 import { NeoInput } from '@/components/ui/neo-input'
 import { NeoBadge } from '@/components/ui/neo-badge'
@@ -18,11 +18,13 @@ export default function SettingsPage() {
   const [toggling, setToggling] = useState(false)
   const [showToken, setShowToken] = useState(false)
   const [showQrisToken, setShowQrisToken] = useState(false)
+  const [showQrisApiKey, setShowQrisApiKey] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [webhookInfo, setWebhookInfo] = useState<{ url: string; pending_update_count: number } | null>(null)
   const [settingWebhook, setSettingWebhook] = useState(false)
   const [qrisFormData, setQrisFormData] = useState({
     username: '',
+    apiKey: '',
     token: '',
     merchantId: '',
     codeQr: '',
@@ -68,6 +70,7 @@ export default function SettingsPage() {
         setQrisSettings(qrisData)
         setQrisFormData({
           username: qrisData.username || '',
+          apiKey: '', // Don't show for security
           token: '', // Don't show for security
           merchantId: qrisData.merchantId || '',
           codeQr: '', // Don't show full QR for security
@@ -133,36 +136,25 @@ export default function SettingsPage() {
     setMessage(null)
 
     try {
-      // Different validation based on QRIS type
-      if (qrisType === 'admin') {
-        // Admin QRIS needs username, token, merchantId, codeQr
-        if (!qrisFormData.username || !qrisFormData.token || !qrisFormData.merchantId || !qrisFormData.codeQr) {
-          setMessage({ type: 'error', text: 'Semua field QRIS harus diisi (Username, Token, Merchant ID, Code QR)' })
-          setSavingQris(false)
-          return
-        }
-      } else {
-        // User QRIS only needs token, merchantId, codeQr (no apiKey or username)
-        if (!qrisFormData.token || !qrisFormData.merchantId || !qrisFormData.codeQr) {
-          setMessage({ type: 'error', text: 'Semua field harus diisi (Token, Merchant ID, Code QR)' })
-          setSavingQris(false)
-          return
-        }
+      if (!qrisFormData.username || !qrisFormData.apiKey || !qrisFormData.token || !qrisFormData.merchantId || !qrisFormData.codeQr) {
+        setMessage({ type: 'error', text: 'Semua field QRIS harus diisi (Username, API Key, Token, Merchant ID, Code QR)' })
+        setSavingQris(false)
+        return
       }
 
       const result = await saveQrisSettings(
-        qrisType,
-        qrisFormData.username || '',
-        '', // API Key is hardcoded, don't send from form
+        'admin',
+        qrisFormData.username,
+        qrisFormData.apiKey,
         qrisFormData.token,
-        qrisType === 'user' ? (await getCurrentUserId()) : undefined,
+        undefined,
         qrisFormData.merchantId,
         qrisFormData.codeQr
       )
 
       if (result.success) {
-        setMessage({ type: 'success', text: `Pengaturan QRIS ${qrisType === 'admin' ? 'Admin' : 'User'} berhasil disimpan! Bot sekarang siap menerima pembayaran QRIS.` })
-        setQrisFormData({ ...qrisFormData, token: '', codeQr: '' })
+        setMessage({ type: 'success', text: 'Pengaturan QRIS berhasil disimpan! Bot sekarang siap menerima pembayaran QRIS.' })
+        setQrisFormData({ ...qrisFormData, apiKey: '', token: '', codeQr: '' })
         fetchQrisSettings()
       } else {
         setMessage({ type: 'error', text: result.error || 'Gagal menyimpan QRIS settings' })
@@ -171,17 +163,6 @@ export default function SettingsPage() {
       setMessage({ type: 'error', text: 'Terjadi kesalahan saat menyimpan QRIS settings: ' + String(error) })
     } finally {
       setSavingQris(false)
-    }
-  }
-
-  async function getCurrentUserId() {
-    try {
-      const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_APP_URL || `https://${process.env.VERCEL_URL || 'localhost:3000'}`)
-      const res = await fetch(`${baseUrl}/api/user/profile`)
-      const data = await res.json()
-      return data.user?.id || ''
-    } catch {
-      return ''
     }
   }
 
@@ -621,13 +602,56 @@ export default function SettingsPage() {
             </div>
           </form>
         ) : (
-          // User QRIS Setup (Code QR, Token, Merchant ID only - API Key is hardcoded)
+          // User QRIS Setup (full credentials)
           <form onSubmit={handleSubmitQrisSettings}>
             <div className="flex flex-col gap-5">
               <div className="p-4 bg-amber-50/50 border border-amber-200/50 rounded-lg">
                 <p className="text-sm text-amber-900">
-                  <strong>⚠️ Setup Akun Sendiri:</strong> Masukkan Token, Merchant ID, dan Code QR akun Orkut Anda. API Key sudah di-hardcode di sistem.
+                  <strong>⚠️ Setup Akun Sendiri:</strong> Masukkan semua kredensial akun Orkut Anda.
                 </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label htmlFor="qrisUsername" className="text-sm font-medium text-muted-foreground">
+                  Username Orkut
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <NeoInput
+                    id="qrisUsername"
+                    type="text"
+                    placeholder="username_orkut"
+                    className="pl-11"
+                    value={qrisFormData.username}
+                    onChange={(e) => setQrisFormData({ ...qrisFormData, username: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label htmlFor="qrisApiKey" className="text-sm font-medium text-muted-foreground">
+                  API Key Orkut
+                </label>
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <NeoInput
+                    id="qrisApiKey"
+                    type={showQrisApiKey ? 'text' : 'password'}
+                    placeholder="Masukkan API Key"
+                    className="pl-11 pr-12 font-mono text-sm"
+                    value={qrisFormData.apiKey}
+                    onChange={(e) => setQrisFormData({ ...qrisFormData, apiKey: e.target.value })}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowQrisApiKey(!showQrisApiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showQrisApiKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -653,43 +677,6 @@ export default function SettingsPage() {
                     {showQrisToken ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label htmlFor="qrisMerchantId" className="text-sm font-medium text-muted-foreground">
-                  Merchant ID Orkut
-                </label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <NeoInput
-                    id="qrisMerchantId"
-                    type="text"
-                    placeholder="2008874"
-                    className="pl-11 font-mono text-sm"
-                    value={qrisFormData.merchantId}
-                    onChange={(e) => setQrisFormData({ ...qrisFormData, merchantId: e.target.value })}
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">Merchant ID dari Orkut</p>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label htmlFor="qrisCodeQr" className="text-sm font-medium text-muted-foreground">
-                  Code QR (QRIS String)
-                </label>
-                <div className="relative">
-                  <NeoInput
-                    id="qrisCodeQr"
-                    type="text"
-                    placeholder="00020101021126670016COM.NOBUBANK..."
-                    className="pl-4 pr-4 font-mono text-xs"
-                    value={qrisFormData.codeQr}
-                    onChange={(e) => setQrisFormData({ ...qrisFormData, codeQr: e.target.value })}
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">String QR Code dari Orkut</p>
               </div>
 
               <NeoButton type="submit" disabled={savingQris} className="w-full sm:w-auto">
