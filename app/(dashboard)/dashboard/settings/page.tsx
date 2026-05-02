@@ -135,8 +135,8 @@ export default function SettingsPage() {
     try {
       // Different validation based on QRIS type
       if (qrisType === 'admin') {
-        // Admin QRIS only needs token, merchantId, codeQr
-        if (!qrisFormData.token || !qrisFormData.merchantId || !qrisFormData.codeQr || !qrisFormData.username) {
+        // Admin QRIS needs username, token, merchantId, codeQr
+        if (!qrisFormData.username || !qrisFormData.token || !qrisFormData.merchantId || !qrisFormData.codeQr) {
           setMessage({ type: 'error', text: 'Semua field QRIS harus diisi (Username, Token, Merchant ID, Code QR)' })
           setSavingQris(false)
           return
@@ -176,7 +176,8 @@ export default function SettingsPage() {
 
   async function getCurrentUserId() {
     try {
-      const res = await fetch('/api/user/profile')
+      const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_APP_URL || `https://${process.env.VERCEL_URL || 'localhost:3000'}`)
+      const res = await fetch(`${baseUrl}/api/user/profile`)
       const data = await res.json()
       return data.user?.id || ''
     } catch {
