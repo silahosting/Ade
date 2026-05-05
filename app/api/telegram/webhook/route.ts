@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBotSettingsByToken, getAllProducts, getAllOrders, getProductById, updateProduct, createOrder, getQrisSettings, createPayment, updatePaymentByOrderId, getPaymentByOrderId, updateOrder } from '@/lib/github-db'
 import { createOrkutQrisPayment, checkOrkutPaymentStatus } from '@/lib/orkut'
+import { createMidtransQrisPayment, checkMidtransPaymentStatus } from '@/lib/midtrans'
 import type { Product } from '@/types'
 
 // Telegram API base URL
@@ -1061,9 +1062,9 @@ async function checkQrisPaymentStatusByProvider(
     // Get QRIS settings to check provider
     const qrisSettings = await getQrisSettings(qrisType, qrisType === 'user' ? userId : undefined)
     
-    if (!qrisSettings) {
+    if (!qrisSettings || !qrisSettings.isActive) {
       // Fallback to ORKUT if no settings found
-      console.log('[v0] No QRIS settings found, using ORKUT fallback for status check')
+      console.log('[v0] No active QRIS settings found, using ORKUT fallback for status check')
       return await checkOrkutPaymentStatus(transactionId, qrisType, userId)
     }
 
@@ -1071,12 +1072,24 @@ async function checkQrisPaymentStatusByProvider(
     if (qrisSettings.provider === 'midtrans') {
       console.log('[v0] Using Midtrans provider for status check')
       
-      // For now, we'll use checkOrkutPaymentStatus as fallback
-      // TODO: Create proper Midtrans payment status check integration
+      // Validate Midtrans credentials
+      if (!qrisSettings.midtransServerKey) {
+        console.error('[v0] Midtrans server key missing for status check')
+        return {
+          success: false,
+          status: 'failed',
+          transactionId,
+          error: 'Midtrans credentials tidak lengkap',
+        }
+      }
+
+      return await checkMidtransPaymentStatus(transactionId, qrisSettings.midtransServerKey)
+    } else if (qrisSettings.provider === 'orkut') {
+      console.log('[v0] Using ORKUT provider for status check')
       return await checkOrkutPaymentStatus(transactionId, qrisType, userId)
     } else {
       // Default to ORKUT provider
-      console.log('[v0] Using ORKUT provider for status check')
+      console.log('[v0] Unknown provider, using ORKUT fallback for status check')
       return await checkOrkutPaymentStatus(transactionId, qrisType, userId)
     }
   } catch (error) {
@@ -1097,23 +1110,50 @@ async function createQrisPaymentByProvider(
     // Get QRIS settings to check provider
     const qrisSettings = await getQrisSettings(qrisType, qrisType === 'user' ? userId : undefined)
     
-    if (!qrisSettings) {
+    if (!qrisSettings || !qrisSettings.isActive) {
       // Fallback to ORKUT if no settings found
-      console.log('[v0] No QRIS settings found, using ORKUT fallback')
+      console.log('[v0] No active QRIS settings found, using ORKUT fallback')
       return await createOrkutQrisPayment(amount, description, qrisType, userId)
     }
 
     // Check provider type
     if (qrisSettings.provider === 'midtrans') {
-      console.log('[v0] Using Midtrans provider for payment')
+      console.log('[v0] Using Midtrans provider for payment creation')
       
-      // For now, we'll use createOrkutQrisPayment as fallback since Midtrans integration 
-      // needs to be properly set up in lib/midtrans.ts
-      // TODO: Create proper Midtrans payment integration
+      // Validate Midtrans credentials
+      if (!qrisSettings.midtransClientKey || !qrisSettings.midtransServerKey || !qrisSettings.midtransMerchantId) {
+        console.error('[v0] Midtrans credentials incomplete:', {
+          hasClientKey: !!qrisSettings.midtransClientKey,
+          hasServerKey: !!qrisSettings.midtransServerKey,
+          hasMerchantId: !!qrisSettings.midtransMerchantId,
+        })
+        return {
+          success: false,
+          error: 'Midtrans credentials tidak lengkap. Hubungi admin.',
+          transactionId: '',
+          qrisUrl: '',
+          qrsImageUrl: '',
+          qrString: '',
+          amount,
+          originalAmount: amount,
+          fee: 0,
+          expiresAt: '',
+        }
+      }
+
+      return await createMidtransQrisPayment(
+        amount,
+        description,
+        qrisSettings.midtransClientKey,
+        qrisSettings.midtransServerKey,
+        qrisSettings.midtransMerchantId
+      )
+    } else if (qrisSettings.provider === 'orkut') {
+      console.log('[v0] Using ORKUT provider for payment')
       return await createOrkutQrisPayment(amount, description, qrisType, userId)
     } else {
       // Default to ORKUT provider
-      console.log('[v0] Using ORKUT provider for payment')
+      console.log('[v0] Unknown provider, using ORKUT fallback')
       return await createOrkutQrisPayment(amount, description, qrisType, userId)
     }
   } catch (error) {
