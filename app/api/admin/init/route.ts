@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createUser, getAllUsers } from '@/lib/github-db'
+import { createUser, getUsers } from '@/lib/github-db'
 import bcrypt from 'bcryptjs'
 
 export async function POST(request: NextRequest) {
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if admin already exists
-    const existingUsers = await getAllUsers()
+    const existingUsers = await getUsers()
     if (existingUsers && existingUsers.length > 0) {
       return NextResponse.json(
         { error: 'Admin sudah pernah dibuat sebelumnya. Gunakan login atau reset password.' },
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     // Check if admin already exists
-    const users = await getAllUsers()
+    const users = await getUsers()
     const adminExists = users && users.some((u) => u.role === 'admin')
 
     if (adminExists) {
