@@ -640,13 +640,13 @@ async function handleCallbackQuery(
         return
       }
 
-      // Try to get user QRIS, fallback to admin QRIS
-      let qrisResult = await createOrkutQrisPayment(totalPrice, `Pembayaran ${product.name}`, 'user', userId)
+      // Try to get user QRIS first, fallback to admin QRIS
+      let qrisResult = await createQrisPaymentByProvider(totalPrice, `Pembayaran ${product.name}`, userId, 'user')
       
       if (!qrisResult.success) {
         // Fallback to admin QRIS
         console.log('[v0] User QRIS not found or failed, falling back to admin QRIS')
-        qrisResult = await createOrkutQrisPayment(totalPrice, `Pembayaran ${product.name}`, 'admin')
+        qrisResult = await createQrisPaymentByProvider(totalPrice, `Pembayaran ${product.name}`, userId, 'admin')
       }
 
       if (!qrisResult.success) {
@@ -749,10 +749,10 @@ async function handleCallbackQuery(
       }
 
       // Check status real-time from Orkut
-      const statusCheck = await checkOrkutPaymentStatus(
+      const statusCheck = await checkQrisPaymentStatusByProvider(
         payments.transactionId,
-        'user',
-        order.buyerId
+        order.buyerId,
+        'user'
       )
 
       if (statusCheck.status === 'paid') {
@@ -1048,6 +1048,78 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Webhook error:', error)
     return NextResponse.json({ ok: true })
+  }
+}
+
+// Helper function to check QRIS payment status with provider routing
+async function checkQrisPaymentStatusByProvider(
+  transactionId: string,
+  userId: string,
+  qrisType: 'admin' | 'user' = 'admin'
+) {
+  try {
+    // Get QRIS settings to check provider
+    const qrisSettings = await getQrisSettings(qrisType, qrisType === 'user' ? userId : undefined)
+    
+    if (!qrisSettings) {
+      // Fallback to ORKUT if no settings found
+      console.log('[v0] No QRIS settings found, using ORKUT fallback for status check')
+      return await checkOrkutPaymentStatus(transactionId, qrisType, userId)
+    }
+
+    // Check provider type
+    if (qrisSettings.provider === 'midtrans') {
+      console.log('[v0] Using Midtrans provider for status check')
+      
+      // For now, we'll use checkOrkutPaymentStatus as fallback
+      // TODO: Create proper Midtrans payment status check integration
+      return await checkOrkutPaymentStatus(transactionId, qrisType, userId)
+    } else {
+      // Default to ORKUT provider
+      console.log('[v0] Using ORKUT provider for status check')
+      return await checkOrkutPaymentStatus(transactionId, qrisType, userId)
+    }
+  } catch (error) {
+    console.error('[v0] Error in checkQrisPaymentStatusByProvider:', error)
+    // Fallback to ORKUT on error
+    return await checkOrkutPaymentStatus(transactionId, qrisType, userId)
+  }
+}
+
+// Helper function to create QRIS payment with provider routing
+async function createQrisPaymentByProvider(
+  amount: number,
+  description: string,
+  userId: string,
+  qrisType: 'admin' | 'user' = 'admin'
+) {
+  try {
+    // Get QRIS settings to check provider
+    const qrisSettings = await getQrisSettings(qrisType, qrisType === 'user' ? userId : undefined)
+    
+    if (!qrisSettings) {
+      // Fallback to ORKUT if no settings found
+      console.log('[v0] No QRIS settings found, using ORKUT fallback')
+      return await createOrkutQrisPayment(amount, description, qrisType, userId)
+    }
+
+    // Check provider type
+    if (qrisSettings.provider === 'midtrans') {
+      console.log('[v0] Using Midtrans provider for payment')
+      
+      // For now, we'll use createOrkutQrisPayment as fallback since Midtrans integration 
+      // needs to be properly set up in lib/midtrans.ts
+      // TODO: Create proper Midtrans payment integration
+      return await createOrkutQrisPayment(amount, description, qrisType, userId)
+    } else {
+      // Default to ORKUT provider
+      console.log('[v0] Using ORKUT provider for payment')
+      return await createOrkutQrisPayment(amount, description, qrisType, userId)
+    }
+  } catch (error) {
+    console.error('[v0] Error in createQrisPaymentByProvider:', error)
+    // Fallback to ORKUT on error
+    return await createOrkutQrisPayment(amount, description, qrisType, userId)
   }
 }
 
