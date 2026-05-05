@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPayments } from '@/lib/github-db'
-import { getSessionUser } from '@/lib/session'
+import { getSession } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getSessionUser()
+    const user = await getSession()
     if (!user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
