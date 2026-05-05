@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUser, getUsers } from '@/lib/github-db'
-import bcrypt from 'bcryptjs'
+import { hashPassword } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,9 +30,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Hash password
-    const saltRounds = 10
-    const hashedPassword = await bcrypt.hash(password, saltRounds)
+    // Hash password using same algorithm as login
+    const hashedPassword = await hashPassword(password)
 
     // Create admin user
     const adminUser = await createUser({
