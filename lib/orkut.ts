@@ -95,7 +95,8 @@ export async function createOrkutQrisPayment(
       merchantid: merchantId,
     })
 
-    const response = await fetch(`${ORKUT_API_BASE}/orderkuota?${params.toString()}`, {
+    // Use QRIS endpoint, not orderkuota endpoint
+    const response = await fetch(`${ORKUT_API_BASE}/orderqris?${params.toString()}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -195,7 +196,7 @@ export async function checkOrkutPaymentStatus(
       transactionId,
     })
 
-    const response = await fetch(`${ORKUT_API_BASE}/orderkuota?${params.toString()}`, {
+    const response = await fetch(`${ORKUT_API_BASE}/orderqris?${params.toString()}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
