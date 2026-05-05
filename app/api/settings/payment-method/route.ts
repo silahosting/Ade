@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createOrUpdateQrisSettings } from '@/lib/github-db'
-import { getSession } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getSession()
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     const body = await request.json()
     const { provider, midtransClientKey, midtransServerKey, midtransMerchantId } = body
 
@@ -50,12 +41,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Payment settings saved successfully',
-      settings,
+      settings: {
+        ...settings,
+        midtransServerKey: '***', // Hide sensitive data
+      },
     })
   } catch (error) {
     console.error('[Payment Settings] Error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to save settings' },
+      { error: error instanceof Error ? error.message : 'Failed to save settings', details: String(error) },
       { status: 500 }
     )
   }
