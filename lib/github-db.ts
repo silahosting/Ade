@@ -447,3 +447,30 @@ export async function updatePaymentByOrderId(
   const success = await updateFile(content, sha)
   return success ? content.payments[index] : null
 }
+
+// Balance operations
+export async function getUserBalance(userId: string): Promise<number> {
+  const user = await getUserById(userId)
+  return user?.balance || 0
+}
+
+export async function addUserBalance(userId: string, amount: number): Promise<number | null> {
+  const user = await getUserById(userId)
+  if (!user) return null
+  
+  const newBalance = (user.balance || 0) + amount
+  const updated = await updateUser(userId, { balance: newBalance })
+  return updated?.balance || null
+}
+
+export async function deductUserBalance(userId: string, amount: number): Promise<number | null> {
+  const user = await getUserById(userId)
+  if (!user) return null
+  
+  const currentBalance = user.balance || 0
+  if (currentBalance < amount) return null // Insufficient balance
+  
+  const newBalance = currentBalance - amount
+  const updated = await updateUser(userId, { balance: newBalance })
+  return updated?.balance || null
+}

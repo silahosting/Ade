@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
-import { Package, ShoppingCart, DollarSign, Bot, TrendingUp, Clock, CreditCard } from 'lucide-react'
+import { Package, ShoppingCart, DollarSign, Bot, TrendingUp, Clock, CreditCard, Wallet } from 'lucide-react'
 import { getSession } from '@/lib/auth'
-import { getDashboardStats, getOrders } from '@/lib/github-db'
+import { getDashboardStats, getOrders, getUserById } from '@/lib/github-db'
 import { StatsCard } from '@/components/dashboard/StatsCard'
 import { NeoCard, NeoCardHeader, NeoCardTitle, NeoCardContent } from '@/components/ui/neo-card'
 import { NeoBadge } from '@/components/ui/neo-badge'
@@ -42,6 +42,7 @@ export default async function DashboardPage() {
 
   const stats = await getDashboardStats(session.id)
   const orders = await getOrders(session.id)
+  const user = await getUserById(session.id)
   const recentOrders = orders.slice(-5).reverse()
 
   return (
@@ -52,7 +53,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatsCard
           title="Total Produk"
           value={stats.totalProducts}
@@ -73,6 +74,13 @@ export default async function DashboardPage() {
           icon={DollarSign}
           variant="success"
           description={`${stats.completedOrders} pesanan selesai`}
+        />
+        <StatsCard
+          title="Saldo Akun"
+          value={formatCurrency(user?.balance || 0)}
+          icon={Wallet}
+          variant="accent"
+          description="Saldo dari penjualan"
         />
         <StatsCard
           title="Status Bot"

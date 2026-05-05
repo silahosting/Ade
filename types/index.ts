@@ -3,6 +3,7 @@ export interface User {
   email: string
   name: string
   password: string
+  balance: number // Saldo penjualan
   createdAt: string
   updatedAt: string
 }
@@ -56,11 +57,17 @@ export interface QrisSettings {
   id: string
   type: 'admin' | 'user'
   userId?: string // untuk user QRIS, admin QRIS tidak ada userId
-  username: string // Orkut username
-  apiKey: string // Orkut API key
-  token: string // Orkut token
-  merchantId: string // Orkut merchant ID
-  codeQr: string // QRIS code string
+  provider: 'orkut' | 'midtrans' // Payment provider
+  // Orkut settings
+  username?: string // Orkut username
+  apiKey?: string // Orkut API key
+  token?: string // Orkut token
+  merchantId?: string // Orkut merchant ID
+  codeQr?: string // QRIS code string
+  // Midtrans settings
+  midtransClientKey?: string
+  midtransServerKey?: string
+  midtransMerchantId?: string
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -71,10 +78,12 @@ export interface Payment {
   orderId: string
   userId: string
   amount: number
+  paymentMethod: 'orkut' | 'midtrans'
   qrisUrl?: string
   transactionId?: string
+  midtransTransactionId?: string // Midtrans specific
+  midtransSnapUrl?: string // Midtrans Snap URL
   status: 'unpaid' | 'pending' | 'paid' | 'expired' | 'failed'
-  paymentMethod: 'qris'
   createdAt: string
   updatedAt: string
 }

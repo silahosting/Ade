@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBotSettingsByToken, getAllProducts, getAllOrders, getProductById, updateProduct, createOrder, getQrisSettings, createPayment, updatePaymentByOrderId, getPaymentByOrderId, updateOrder } from '@/lib/github-db'
 import { createOrkutQrisPayment, checkOrkutPaymentStatus } from '@/lib/orkut'
+import { MidtransPayment, getMidtransConfig } from '@/lib/midtrans'
 import type { Product } from '@/types'
 
 // Telegram API base URL
@@ -640,36 +641,87 @@ async function handleCallbackQuery(
         return
       }
 
-      // Try to get user QRIS, fallback to admin QRIS
-      let qrisResult = await createOrkutQrisPayment(totalPrice, `Pembayaran ${product.name}`, 'user', userId)
-      
-      if (!qrisResult.success) {
-        // Fallback to admin QRIS
-        console.log('[v0] User QRIS not found or failed, falling back to admin QRIS')
-        qrisResult = await createOrkutQrisPayment(totalPrice, `Pembayaran ${product.name}`, 'admin')
+      // Get payment settings to determine which provider to use
+      const qrisSettings = await getQrisSettings('admin')
+      const paymentProvider = qrisSettings?.provider || 'orkut'
+
+      let paymentResult: any
+      let paymentMethod: 'orkut' | 'midtrans'
+
+      if (paymentProvider === 'midtrans') {
+        // Use Midtrans
+        try {
+          const config = getMidtransConfig()
+          const midtrans = new MidtransPayment(config)
+          
+          const transaction = await midtrans.createTransaction({
+            orderId: newOrder.id,
+            gross_amount: totalPrice,
+            firstName: user.first_name,
+            lastName: user.last_name || '',
+            email: 'buyer@example.com',
+            phone: '62812345678',
+            itemDetails: [
+              {
+                id: product.id,
+                price: product.price,
+                quantity,
+                name: product.name,
+              },
+            ],
+            customExpiry: 30,
+          })
+
+          paymentResult = {
+            success: true,
+            amount: totalPrice,
+            token: transaction.token,
+            redirectUrl: transaction.redirect_url,
+            transactionId: transaction.token,
+          }
+          paymentMethod = 'midtrans'
+        } catch (error) {
+          console.error('[v0] Midtrans payment error:', error)
+          // Fallback to Orkut if Midtrans fails
+          paymentResult = await createOrkutQrisPayment(totalPrice, `Pembayaran ${product.name}`, 'user', userId)
+          if (!paymentResult.success) {
+            paymentResult = await createOrkutQrisPayment(totalPrice, `Pembayaran ${product.name}`, 'admin')
+          }
+          paymentMethod = 'orkut'
+        }
+      } else {
+        // Use Orkut
+        paymentResult = await createOrkutQrisPayment(totalPrice, `Pembayaran ${product.name}`, 'user', userId)
+        
+        if (!paymentResult.success) {
+          paymentResult = await createOrkutQrisPayment(totalPrice, `Pembayaran ${product.name}`, 'admin')
+        }
+        paymentMethod = 'orkut'
       }
 
-      if (!qrisResult.success) {
-        await answerCallbackQuery(botToken, callbackQuery.id, 'Gagal membuat QRIS: ' + qrisResult.error, true)
+      if (!paymentResult.success) {
+        await answerCallbackQuery(botToken, callbackQuery.id, 'Gagal membuat pembayaran: ' + paymentResult.error, true)
         return
       }
 
-      // Update order with QRIS details
+      // Update order with payment details
       await updatePaymentByOrderId(newOrder.id, {
         status: 'pending',
-        transactionId: qrisResult.transactionId,
-        qrisUrl: qrisResult.qrString,
+        transactionId: paymentResult.transactionId,
+        qrisUrl: paymentResult.qrString,
       })
 
       // Create payment record
       await createPayment({
         orderId: newOrder.id,
         userId,
-        amount: qrisResult.amount,
-        qrisUrl: qrisResult.qrString,
-        transactionId: qrisResult.transactionId,
+        amount: paymentResult.amount,
+        paymentMethod,
+        qrisUrl: paymentResult.qrString,
+        transactionId: paymentResult.transactionId,
+        midtransTransactionId: paymentMethod === 'midtrans' ? paymentResult.token : undefined,
+        midtransSnapUrl: paymentMethod === 'midtrans' ? paymentResult.redirectUrl : undefined,
         status: 'pending',
-        paymentMethod: 'qris',
       })
 
       // Clean up session
@@ -678,52 +730,71 @@ async function handleCallbackQuery(
       await answerCallbackQuery(botToken, callbackQuery.id)
 
       // Send QRIS payment message with image
-      let qrisText = `💳 *PEMBAYARAN QRIS*\n\n`
+      let qrisText = `💳 *PEMBAYARAN ${paymentProvider === 'midtrans' ? 'MIDTRANS' : 'QRIS'}*\n\n`
       qrisText += `📦 *Produk:* ${product.name}\n`
       qrisText += `📊 *Jumlah:* ${quantity}x\n`
-      qrisText += `💰 *Harga:* Rp ${toRupiah(qrisResult.originalAmount)}\n`
-      qrisText += `💸 *Admin Fee:* Rp ${toRupiah(qrisResult.fee)}\n`
+      qrisText += `💰 *Harga:* Rp ${toRupiah(paymentResult.originalAmount || paymentResult.amount)}\n`
+      if (paymentResult.fee) {
+        qrisText += `💸 *Admin Fee:* Rp ${toRupiah(paymentResult.fee)}\n`
+      }
       qrisText += `━━━━━━━━━━━━━━━━━━━━━\n`
-      qrisText += `💵 *Total Bayar:* Rp ${toRupiah(qrisResult.amount)}\n\n`
-      qrisText += `🆔 *ID Transaksi:* \`${qrisResult.transactionId}\`\n\n`
-      qrisText += `📌 *Instruksi Pembayaran:*\n`
-      qrisText += `1. Buka aplikasi e-wallet/banking\n`
-      qrisText += `2. Scan QR Code di bawah\n`
-      qrisText += `3. Ikuti proses pembayaran\n`
-      qrisText += `4. Tunggu konfirmasi (otomatis)\n\n`
-      qrisText += `⏱️ *Berlaku sampai:* ${new Date(qrisResult.expiresAt).toLocaleString('id-ID')}\n\n`
+      qrisText += `💵 *Total Bayar:* Rp ${toRupiah(paymentResult.amount)}\n\n`
+      qrisText += `🆔 *ID Transaksi:* \`${paymentResult.transactionId}\`\n\n`
+      
+      if (paymentProvider === 'midtrans') {
+        qrisText += `📌 *Instruksi Pembayaran:*\n`
+        qrisText += `1. Klik tombol "Bayar Sekarang" di bawah\n`
+        qrisText += `2. Pilih metode pembayaran QRIS\n`
+        qrisText += `3. Scan QR Code\n`
+        qrisText += `4. Tunggu konfirmasi otomatis\n\n`
+      } else {
+        qrisText += `📌 *Instruksi Pembayaran:*\n`
+        qrisText += `1. Buka aplikasi e-wallet/banking\n`
+        qrisText += `2. Scan QR Code di bawah\n`
+        qrisText += `3. Ikuti proses pembayaran\n`
+        qrisText += `4. Tunggu konfirmasi (otomatis)\n\n`
+        if (paymentResult.expiresAt) {
+          qrisText += `⏱️ *Berlaku sampai:* ${new Date(paymentResult.expiresAt).toLocaleString('id-ID')}\n\n`
+        }
+      }
+      
       qrisText += `_Pembayaran akan diproses secara otomatis setelah berhasil._`
 
       const keyboard = {
         inline_keyboard: [
+          ...(paymentProvider === 'midtrans' ? [[{ text: '💳 Bayar Sekarang (Midtrans)', url: paymentResult.redirectUrl }]] : []),
           [{ text: '✅ Cek Status Pembayaran', callback_data: `check_payment_${newOrder.id}` }],
           [{ text: '🔄 Refresh', callback_data: `refresh_payment_${newOrder.id}` }],
           [{ text: '❌ Batal', callback_data: 'menu_main' }]
         ]
       }
 
-      // Send QR code image from Orkut API
-      try {
-        await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            photo: qrisResult.qrsImageUrl,
-            caption: qrisText,
-            parse_mode: 'Markdown',
-            reply_markup: keyboard,
-          }),
-        })
-      } catch (photoError) {
-        console.log('[v0] Failed to send photo, sending text with QR string:', photoError)
+      // Send QR code image for Orkut, or text for Midtrans
+      if (paymentProvider === 'orkut' && paymentResult.qrsImageUrl) {
+        try {
+          await fetch(`${TELEGRAM_API}${botToken}/sendPhoto`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              photo: paymentResult.qrsImageUrl,
+              caption: qrisText,
+              parse_mode: 'Markdown',
+              reply_markup: keyboard,
+            }),
+          })
+        } catch (photoError) {
+          console.log('[v0] Failed to send photo, sending text:', photoError)
+          await sendMessage(botToken, chatId, qrisText, { replyMarkup: keyboard })
+        }
+      } else {
         await sendMessage(botToken, chatId, qrisText, { replyMarkup: keyboard })
       }
 
       return
     } catch (error) {
-      console.error('[v0] QRIS Payment Error:', error)
-      await answerCallbackQuery(botToken, callbackQuery.id, 'Gagal memproses pembayaran QRIS', true)
+      console.error('[v0] Payment Error:', error)
+      await answerCallbackQuery(botToken, callbackQuery.id, 'Gagal memproses pembayaran', true)
       return
     }
   }
